@@ -1,0 +1,163 @@
+# rules for differential expression
+# =============================================================
+#
+"""
+requires:
+    - deseq2ContrastBatch in $PATH.
+    - R-DESeq2, ggplot2
+
+config:
+    SAMPLE_INFO: <sampleInfo.csv>
+    deseq2:
+      padj_threshold: .05
+      FC_threshold: 1
+      {genome}:
+          {analysis}:
+              use_batch: ___
+              contrasts: [contrast1,contrast2,...]
+    deseq2_plotPCA:
+        color:
+        shape:
+    anova:
+        {genome}: 
+            [group1,group2,...]
+"""
+#quickfix
+#if 'SAMPLE_INFO' not in config:
+#    config['SAMPLE_INFO'] = config['SAMPLE_FILE']
+#
+from os import path
+def _getAnalysis(wildcards):
+    """return analysis dict from genome/analysis"""
+    return config['deseq2'][wildcards.genome][wildcards.analysis]
+    
+#rule deseq2:
+#    input:
+#        sampleInfo=config['SAMPLE_FILE'],
+#        geneCount="{genome}.gene_count/geneCount.csv"
+#    output:
+#        pca = "{genome}.deseq2.{analysis}/plotPca_top500.pdf"
+#        #dynamic("{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.csv")
+#        #lambda wildcards: [f"{{genome}}.deseq2.{{analysis}}/{contrast}.StatWithVst.padj_05.csv"
+#        #    for contrast in _getContrasts(wildcards)]
+#    params:
+#        contrasts=lambda wildcards: ','.join(_getAnalysis(wildcards)['contrasts']),
+#        use_batch=lambda wildcards: _getAnalysis(wildcards).get('use_batch', False)
+#    run:
+#        if params.use_batch:
+#            shell( """ cd {wildcards.genome}.deseq2.{wildcards.analysis}
+#                deseq2ContrastBatch -b ../{input.geneCount} ../{input.sampleInfo} {params.contrasts}
+#                """)
+#        else:
+#            shell( """ cd {wildcards.genome}.deseq2.{wildcards.analysis}
+#                deseq2ContrastBatch ../{input.geneCount} ../{input.sampleInfo} {params.contrasts}
+#                """)
+rule deseq2_model:
+    input:
+        sampleInfo=config['SAMPLE_INFO'],
+        geneCount="{genome}.gene_count/geneCount.csv",
+    output:
+        vst = "{genome}.deseq2.{analysis}/gene.vst_blind.csv",
+        vstRds = "{genome}.deseq2.{analysis}/vst.rds",
+        rds = "{genome}.deseq2.{analysis}/dds.rds",
+        geneCount = "{genome}.deseq2.{analysis}/geneCount.filtered.csv",
+        sampleInfo = "{genome}.deseq2.{analysis}/sampleInfo.filtered.csv",
+    params:
+        #get group,contrasts and batch (optional) from analysis or deseq2 config
+        group=lambda wildcards: _getAnalysis(wildcards).get('group',
+                config['deseq2'].get('group')),
+        contrasts=lambda wildcards: _getAnalysis(wildcards).get('contrasts',
+                config['deseq2'].get('contrasts')),
+        batch=lambda wildcards: _getAnalysis(wildcards).get('batch',
+                config['deseq2'].get('batch')),
+    script:
+        "../scripts/deseq2_model.R"
+
+rule deseq2_plotPCA:
+    input:
+        vst=rules.deseq2_model.output.vst,
+        sampleInfo=rules.deseq2_model.output.sampleInfo
+    output:
+        csv="{genome}.deseq2.{analysis}/plotPca.csv",
+        pdf="{genome}.deseq2.{analysis}/plotPca.pdf"
+    params:
+        color=config['deseq2_plotPCA'].get('color', 'group'),
+        label=config['deseq2_plotPCA'].get('label', 'sample'),
+        shape=config['deseq2_plotPCA'].get('shape'),
+        size=config['deseq2_plotPCA'].get('size'),
+        pointSize=3, pointAlpha=.8,
+        labelSize=3, labelColor='black',
+        equalScale=True
+    script:
+        "../scripts/deseq2_plotPCA.R"
+
+rule deseq2_contrast:
+    input:
+        rds=rules.deseq2_model.output.rds,
+        vst=rules.deseq2_model.output.vst,
+        sampleInfo=rules.deseq2_model.output.sampleInfo
+    output:
+        accepted="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.accepted.csv",
+        rejected="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.rejected.csv",
+        sig="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.csv",
+        maplot="{genome}.deseq2.{analysis}/{contrast}.plotMA.pdf",
+    params:
+        padj_threshold=config['deseq2']['padj_threshold'],
+        fc_threshold=config['deseq2']['FC_threshold']
+    script:
+        "../scripts/deseq2_contrast.R"
+
+# anova base on vst.blind
+#rule anova:
+#    input:
+#        rds="{prefix}dds.rds"
+#    output:
+#        csv="{prefix}anova.csv"
+#    #params:
+#    #    groups=lambda wildcards: config['anova'][wildcards.genome]
+#    script:
+#        SNAKE_DIR + '/scripts/deseq2_anodev.R'
+        
+rule collate_contrasts:
+    input:
+        rds=rules.deseq2_model.output.rds,
+        sampleInfo=rules.deseq2_model.output.sampleInfo,
+        rpkm=rules.gene_norm_rpkm.output[0]
+    output:
+        csv="{genome}.deseq2.{analysis}/mastersheet.csv",
+    params:
+        contrasts=lambda wildcards: config['deseq2'][wildcards.genome][wildcards.analysis]['contrasts']
+    script:
+        '../scripts/mastersheet.R'
+
+# align the rpkm and vst expr with mastersheet.
+rule mastersheet_expr:
+    input:
+        mastersheet="{genome}.deseq2.{analysis}/mastersheet.csv",
+        rpkm=rules.gene_norm_rpkm.output[0],
+        vst = "{genome}.deseq2.{analysis}/gene.vst_blind.csv",
+    output:
+        rpkm="{genome}.deseq2.{analysis}/mastersheet.rpkm.csv",
+        vst="{genome}.deseq2.{analysis}/mastersheet.vst.csv",
+    script:
+        '../scripts/mastersheet_expr.R'
+
+rule compare_contrasts:
+    input:
+        rds=rules.deseq2_model.output.rds,
+    output:
+        up="{genome}.deseq2.{analysis}/compare_contrasts.up.csv",
+        down="{genome}.deseq2.{analysis}/compare_contrasts.down.csv",
+        both="{genome}.deseq2.{analysis}/compare_contrasts.both.csv",
+        up_pdf="{genome}.deseq2.{analysis}/compare_contrasts.up.pdf",
+        down_pdf="{genome}.deseq2.{analysis}/compare_contrasts.down.pdf",
+        both_pdf="{genome}.deseq2.{analysis}/compare_contrasts.both.pdf",
+        #-: if only one contrast with any signif genes, no pdf will be generated.
+    params:
+        contrasts=lambda wildcards: config['deseq2'][wildcards.genome][wildcards.analysis]['contrasts'],
+        contrastComparisons=config.get('compare_contrasts', None), #default to all contrasts
+        outprefix="{genome}.deseq2.{analysis}/compare_contrasts",
+        padj_threshold=config['deseq2']['padj_threshold'],
+        FC_threshold=config['deseq2']['FC_threshold']
+    script:
+        '../scripts/compare_contrasts.R'

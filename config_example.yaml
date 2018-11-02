@@ -1,0 +1,67 @@
+# general config files for the BMX workflow
+
+# Preferred to set workdir via the command line '--directory DIR'
+workdir: "/home/zl99/github/bmx_seq/demo"
+
+# the genomes in the graft and host
+GENOMES: ['hg38', 'mm10']
+# support data dir include each genome and combined genome dir with fasta,
+# index, genes.gtf, geneInfo.csv, chrom.sizes
+DATA_DIR: "/home/zl99/local/data"
+
+# the Snakefile dir include rules/, scripts/
+SNAKE_DIR: "/home/zl99/github/bmx_seq/starHgmm"
+
+# the raw sequence data dir with each sample as a folder with *_R1*.fastq.gz
+# and, if paired ended, *_R2*.fastq.gz
+INPUT_DIR: "input/"
+
+# the sample info csv files with three columns (the first line will be ignored):
+# - sampleName(sample subfolder name)
+# - sampleGroup: used in CONTRASTS
+# - batch or pair: used in paired or batched comparison
+SAMPLE_FILE: "sampleInfo.csv"
+
+
+#######
+# Rule configuration: parameters of each step
+#
+trim_galore:
+    extra: "--illumina --fastqc"
+
+gene_count:
+    extra: "-Q 10 -t exon -g gene_id -s 2"
+
+star_hgmm:
+    extra: "--outFilterMismatchNoverLmax 0.05"
+
+bamCoverage:
+    extra: "--binSize 10"
+
+deseq2:
+    padj_threshold: .05
+    FC_threshold: 1
+    hg38:
+        grouped_all:
+            contrasts:
+                - HICr-H2D
+                - AICr-A2D
+    mm10:
+        grouped_all:
+            contrasts:
+                - HICr-ctrl
+                - AICr-ctrl
+deseq2_plotPCA:
+    color: group
+
+# data config
+# -------------------------------------------------------------
+
+data:
+    hg38:
+        fa_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/GRCh38.primary_assembly.genome.fa.gz"
+        gtf_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_24/gencode.v24.annotation.gtf.gz"
+    mm10:
+        fa_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M10/GRCm38.primary_assembly.genome.fa.gz"
+        gtf_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M10/gencode.vM10.annotation.gtf.gz"
+

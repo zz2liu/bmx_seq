@@ -1,0 +1,75 @@
+# gene count, annotate and summary rules
+# require config: {gene_count: {extra:}}
+# todo: geneSummary- keep top 7 put others to other
+# todo: bamstats?
+# need: DATA_DIR, SAMPLES
+from os import path
+
+rule gene_count:
+    input:
+        bams=expand("{genome}/{sample}.bam", sample=SAMPLES, genome="{genome}"),
+        gtf=DATA_DIR + "/{genome}/genes.gtf",
+        #chromsize=DATA_DIR + "/{genome}/chrom.sizes",
+    output:
+        count="{genome}.gene_count/featureCounts.txt",
+        summary="{genome}.gene_count/featureCounts.summary",
+        info=temp("{genome}.gene_count/featureCounts.info"),
+    threads: 10
+    params:
+        extra=config['gene_count']['extra'],
+        outdir="{genome}.gene_count",
+        pattern="1 s%[^\t]*/%%g; 1 s%\.bam%%g"
+    #log: "{genome}/featureCounts.log"
+    shell: """
+        outDir={params.outdir}
+        tmpDir=$(mktemp -d)
+        featureCounts {params.extra} \
+            -T {threads} --tmpDir=$tmpDir \
+            -a {input.gtf} -o $outDir/rawCounts.txt \
+            {input.bams}
+        cat $outDir/rawCounts.txt.summary     | sed -E '{params.pattern}' \
+            > {output.summary}
+            #| sed -E '/^[^\t]+(\t0)+$/ d' > {output.summary}
+        cat $outDir/rawCounts.txt | sed '1 d' | sed -E '{params.pattern}' \
+            | cut -f 1,7- > {output.count}
+        cat $outDir/rawCounts.txt | sed '1 d' \
+            | cut -f 1-6 > {output.info}
+        rm -r $tmpDir
+        """
+
+rule gene_annotate:
+    """trim and align the geneCount with geneInfo."""
+    input:
+        count=rules.gene_count.output.count,
+        #summary=rules.gene_count.output.summary,
+        #info=rules.gene_count.output.info,
+        info=DATA_DIR + "/{genome}/geneInfo.csv",
+        #sampleInfo="{genome}.sampleInfo.csv",
+    output:
+        count="{genome}.gene_count/geneCount.csv",
+        #summary="{genome}.gene_count/geneSummary.csv",
+        info="{genome}.gene_count/geneInfo.csv",
+    script:
+        "../scripts/gene_annotate.R"
+
+rule gene_norm_rpkm:
+    input:
+        count=rules.gene_annotate.output.count,
+        info=rules.gene_annotate.output.info
+    output:
+        "{genome}.gene_count/geneRpkm.csv"
+    script:
+        "../scripts/gene_norm_rpkm.R"
+
+# bam stats to be added later
+rule gene_summary:
+    input:
+        count=rules.gene_annotate.output.count,
+        info=rules.gene_annotate.output.info,
+    output:
+        csv="{genome}.gene_count/geneSummary.csv",
+        pdf="{genome}.gene_count/geneSummary.pdf"
+    script:
+        "../scripts/gene_summary.R"
+
+

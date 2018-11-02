@@ -1,0 +1,33 @@
+"""Requires
+depend:
+    - deeptools
+related:
+    - samtools
+
+config:
+    bamCoverage:
+        extra: --binSize 10
+
+ref:
+    - http://deeptools.readthedocs.io/en/latest/index.html
+"""
+rule bamCoverage:
+    input:
+        bam="{prefix}.bam", bai="{prefix}.bam.bai"
+    output:
+        rpkm="{prefix}.rpkm.bw",
+    threads: 4
+    params:
+        extra=config['bamCoverage']['extra'] or ''
+    shell: """
+        bamCoverage -p {threads} --normalizeUsingRPKM {params.extra} -b {input.bam} -o {output.rpkm}
+    """
+
+rule plotCoverage:
+    input:
+        bam="{prefix}.bam", bai="{prefix}.bam.bai"
+    output:
+        svg="{prefix}.coverage.svg", log="{prefix}.coverage.log"
+    threads: 4
+    shell:
+        "plotCoverage -p {threads} -b {input.bam} -o {output.svg} &> {output.log}"

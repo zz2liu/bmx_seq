@@ -1,0 +1,68 @@
+# general config files for the snakemake workflow
+#
+# the genomes in the graft and host
+GENOMES: ['hg38', 'mm10']
+# support data dir include each genome and combined genome dir with fasta,
+# index, genes.gtf, geneInfo.csv, chrom.sizes
+DATA_DIR: "/home/zl99/local/data"
+
+# the Snakefile dir include rules/, scripts/
+SNAKE_DIR: "/home/zl99/code/ngs/pipelines/starHgmm"
+
+# the raw sequence data dir with each sample as a folder with *_R1*.fastq.gz
+# and, if paired ended, *_R2*.fastq.gz
+INPUT_DIR: "../Project_Emw68"
+
+# the sample info csv files with three columns (the first line will be ignored):
+# - sampleName(sample subfolder name)
+# - sampleGroup: used in CONTRASTS
+# - batch or pair: used in paired or batched comparison
+SAMPLE_FILE: "sampleInfo.csv"
+
+
+#######
+# Rule configuration: parameters of each step
+#
+deseq2:
+    padj_threshold: .05
+    FC_threshold: 1
+    hg38:
+        grouped_all:
+            contrasts:
+                - HICr-H2D
+                - AICr-A2D
+                - MICr-M2D
+    mm10:
+        grouped_all:
+            contrasts:
+                - HICr-ctrlHA
+                - AICr-ctrlHA
+                - MICr-ctrlM
+# not using yet
+#anova:
+#    hg38: [HICr,AICr,MICr,H2D,A2D,M2D]
+#    mm10: [HICr,AICr,MICr,mockHA,mockM]
+#
+trim_galore:
+    extra: "--illumina --fastqc"
+
+gene_count:
+    extra: "-Q 10 -t exon -g gene_id -s 2"
+
+star_hgmm:
+    extra: "--outFilterMismatchNoverLmax 0.05"
+
+# data config
+# -------------------------------------------------------------
+
+data:
+    hg37: 
+        fa_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_27/GRCh37_mapping/GRCh37.primary_assembly.genome.fa.gz"
+        gtf_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_27/GRCh37_mapping/gencode.v27lift37.annotation.gtf.gz"
+    hg38:
+        fa_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_27/GRCh38.primary_assembly.genome.fa.gz"
+        gtf_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_27/gencode.v27.annotation.gtf.gz"
+    mm10:
+        fa_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M15/GRCm38.primary_assembly.genome.fa.gz"
+        gtf_url: "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_mouse/release_M15/gencode.vM15.annotation.gtf.gz"
+

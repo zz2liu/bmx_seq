@@ -1,0 +1,18 @@
+# miscellaneous rules
+#
+"""
+require a rule gene_norm_rpkm
+require a config file with:
+SNAKE_DIR: ___
+"""
+
+# add a column of mean RPKM of all samples in a deseq2 output
+rule deseq_add_rpkm:
+    input:
+        diffexpr="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.csv",
+        rpkm=rules.gene_norm_rpkm.output[0]
+    output:
+        csv="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.addRpkm.csv",
+        png="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.addRpkm.png"
+    script:
+        os.path.join(SNAKE_DIR, "scripts/deseq_add_rpkm.R")

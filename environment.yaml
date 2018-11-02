@@ -1,0 +1,43 @@
+channels:
+    - bioconda
+    - r
+    - conda-forge
+
+dependencies:
+    # general
+    - pandoc
+
+    # bioinfo
+    - ucsc-bedgraphtobigwig
+    - ucsc-fetchchromsizes
+    - ucsc-bedsort
+    - bedtools >=2.26
+    - samtools >=1.5
+    - picard >=2.10
+    - bowtie2 >=2.3
+    #- bwa
+    - trim-galore >=0.4
+    - fastqc >=0.11
+    - star >=2.5
+    - subread >=1.5
+
+    # R
+    - r-base >=3.3
+    - r-shiny
+    - r-yaml
+    - bioconductor-deseq2 >=1.14
+    - bioconductor-limma >=3.30
+    #- r-feather
+    
+    # python3
+    - python >=3.6
+    - numpy >=1.12
+    - scipy >=0.19
+    - pandas >=0.20
+    #- matplotlib >=2.0
+    - pysam
+    - pyyaml
+    #- rpy2 require python
+    # pip install
+    # - feather-format >=0.4
+

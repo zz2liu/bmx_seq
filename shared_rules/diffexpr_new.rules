@@ -1,0 +1,18 @@
+# rules for differential expression
+rule deseq2:
+'''require deseq2ContrastBatch in $PATH.'''
+    input:
+        sampleInfo=config['SAMPLE_FILE'],
+        geneCount="{genome}.gene_count/geneCount.csv",
+    output:
+        "{genome}.deseq2/plotPca_top500.pdf" #] + [ f"{x}.accepted.csv" for x in MM_CONTRASTS ]
+    params:
+        contrasts=','.join(config['CONTRASTS'][wildcards.genome])
+    #params: padj, lfc
+    shell: """
+        cd {wildcards.genome}.deseq2
+        # trim sampleInfo, geneCount with contrasts first
+        deseq2ContrastBatch ../{input.geneCount} ../{input.sampleInfo} {params.contrasts}
+        """
+        #wc -l *.padj_05.csv | awk '{print $2,$1-1}' > contrasts.summary
+

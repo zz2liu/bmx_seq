@@ -1,0 +1,64 @@
+
+# ref: http://broadinstitute.github.io/picard/command-line-overview.html#CollectRnaSeqMetrics
+## download refFlat.txt: http://hgdownload.cse.ucsc.edu/goldenPath/hg38/database/refFlat.txt.gz
+## make rRNA interval file from GTF # https://gist.github.com/slowkow/b11c28796508f03cdf4b
+""" require a config with
+    DATA_DIR
+    GENOME
+
+example:
+    snakemake \
+        --config DATA_DIR=$HOME/local/data GENOME=hg38 \
+        --snakefile $HOME/code/ngs/pipelines/shared/rules/picard.rules \
+        36666.picard_rna_metrics --force
+ GENOME=hg38 \
+"""
+
+DATA_DIR=config['DATA_DIR']
+GENOME=config['GENOME']
+rule test:
+    input: "36666.picard_rna_metrics"
+
+rule make_rRNA_interval_list:
+    """make a list good for picard CollectRnaSeqMatrics
+    """
+    input: 
+        genes="{prefix}/genes.gtf",
+        chrom_sizes="{prefix}/chrom.sizes"
+    output: "{prefix}/rRNA_interval.list"
+    params:
+        genome=lambda wildcards: os.path.basename(wildcards.prefix)
+    shell: """
+        perl -lane 'print "\@SQ\tSN:$F[0]\tLN:$F[1]\tAS:{params.genome}"' {input.chrom_sizes} | \
+            grep -v _ \
+            >> {output}
+
+        grep 'gene_type "rRNA"' {input.genes} | \
+            awk '$3 == "transcript"' | \
+            cut -f1,4,5,7,9 | \
+            perl -lane '
+                /transcript_id "([^"]+)"/ or die "no transcript_id on $.";
+                print join "\t", (@F[0,1,2,3], $1)
+            ' | \
+            sort -k1V -k2n -k3n \
+        >> {output}
+    """
+
+rule collect_rnaseq_metrics:
+    input:
+        bam="{prefix}.bam",
+        ref=f"{DATA_DIR}/{GENOME}/refFlat.txt",
+        rint=f"{DATA_DIR}/{GENOME}/rRNA_interval.list"
+    output: "{prefix}.picard_rna_metrics"
+    params:
+        extra="STRAND=SECOND_READ_TRANSCRIPTION_STRAND"
+    shell: """
+    picard CollectRnaSeqMetrics {params.extra} \\
+            I={input.bam} O={output} \\
+            REF_FLAT={input.ref} \\
+            RIBOSOMAL_INTERVALS={input.rint}
+    """
+    #Quickfix: to make the header of rint and bam consistent
+    #samtools view -H {input.bam} | grep '^@SQ' > tmp.rint
+    #cat {params.rint} >> tmp.rint
+

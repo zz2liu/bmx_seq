@@ -1,0 +1,45 @@
+# =============================================================
+# rules to prepare the genome data
+# =============================================================
+# require a config
+# data:
+#   genome:
+#       fa_url:
+#       gtf_url:
+
+import snakemake
+FTP = snakemake.remote.FTP.RemoteProvider()
+
+# download the lasted main gtf from GENCode
+rule gtf:
+    input: FTP.remote(config['data'][wildcards.genome]['gtf_url'], keep_local=True)
+    output: DATA_DIR/{genome}/genes.gtf
+    shell: """
+        gunzip {input} > {output}
+        """
+rule fa:
+    #input: FTP.remote(config['data'][wildcards.genome]['fa_url'])
+    input: FTP.remote("ftp://hgdownload.cse.ucsc.edu/goldenPath/{genome}/bigZips/{genome}.fa.gz")
+    output: DATA_DIR/{genome}/genome.fa
+    shell: """
+        gunzip {input} > {output}
+        """
+
+rule chromsizes:
+    input: FTP.remote("ftp://hgdownload.cse.ucsc.edu/goldenPath/{genome}/bigZips/{genome}.chrom.sizes")
+    output: DATA_DIR/{genome}/chrom.sizes
+    shell: """
+        mv {input} > {output}
+        """
+
+rule gene_info:
+    input: rules.gtf.output
+    output: DATA_DIR/{genome}/geneInfo.csv
+    script:
+        scripts/gene_info.py
+    #shell:"""
+    #    #extra info from gene.gtf, length from exon.gtf or featureCounts
+    #    """
+
+    
+ 

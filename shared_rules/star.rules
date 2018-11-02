@@ -1,0 +1,61 @@
+# require a config:
+    # DATA_DIR:
+    # GENOME:
+    # READ_LENGTH:
+    # INPUT_DIR:
+    # star: 
+    #   minq:
+    #   extra:
+import os
+
+DATA_DIR = config['DATA_DIR']
+GENOME = config['GENOME']
+READ_LENGTH = config['READ_LENGTH']
+INPUT_DIR = config['INPUT_DIR']
+
+#for mapping flexibility, no GTF is built into index.
+rule starIndex:
+    input:
+        "{prefix}/genome.fa"
+    output:
+        "{prefix}/StarIndex"
+    threads: 16
+    shell:
+        "STAR --runThreadN {threads} --runMode genomeGenerate "
+        "--genomeDir {output} --genomeFastaFiles {input}"
+
+#require at least mem=64G
+rule starSe:
+    input:
+        fastq = [INPUT_DIR + "/{sample}.R1.fq.gz"], #[] is necessary
+        index = f'{DATA_DIR}/{GENOME}/StarIndex',
+        gtf = f'{DATA_DIR}/{GENOME}/genes.gtf'
+    output:
+        #raw=GENOME+'/{sample}/Aligned.out.bam',
+        bam=GENOME+'/{sample}.bam',
+        log=GENOME+'/{sample}/Log.final.out'
+    params: 
+        minq=config['star'].get('minq', 0),
+        extra=config['star']['extra'],
+        #outprefix=lambda wildcards: f'{GENOME}/{wildcards.sample}/',
+        outprefix=GENOME + '/{sample}/',
+        lengthopts=f"--sjdbOverhang {READ_LENGTH-1} --seedSearchStartLmax {(READ_LENGTH+1)//2}"
+    threads: 8
+    #script: "scripts/star_align.py"
+    run:
+        assert len(input.fastq) in {1,2}, \
+            "input->fastq must have 1 (single-end) or 2 (paired-end) elements."
+        readcmd = "--readFilesCommand zcat" if input.fastq[0].endswith(".gz") else ""
+        gtfcmd = f"--sjdbGTFfile {input.gtf}" if input.gtf else ""
+        #outprefix = os.path.dirname(output[0]) + '/'
+        shell("STAR "
+            "{params.extra} {params.lengthopts} "
+            "--runThreadN {threads} "
+            "--genomeDir {input.index} "
+            "--readFilesIn {input.fastq} "
+            "{readcmd} {gtfcmd} "
+            "--outSAMtype BAM Unsorted "
+            "--outFileNamePrefix {params.outprefix} ")
+        shell('samtools view -F0x100 -bh -q {params.minq} '
+            '{params.outprefix}/Aligned.out.bam > {output.bam} ')
+

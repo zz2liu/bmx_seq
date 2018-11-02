@@ -1,0 +1,78 @@
+# rules for alignment
+#
+# require config: star_hgmm: extra
+# todo: hg38mm10 to genome=hg38.mm10, followed by extract
+from os import path
+
+rule combine_genome:
+    input:
+        fa1=f"{DATA_DIR}/{GENOMES[0]}/genome.fa",
+        fa2=f"{DATA_DIR}/{GENOMES[1]}/genome.fa",
+        gtf1=f"{DATA_DIR}/{GENOMES[0]}/genes.gtf",
+        gtf2=f"{DATA_DIR}/{GENOMES[1]}/genes.gtf",
+    output:
+        fa=f"{DATA_DIR}/{GENOMES[0]}{GENOMES[1]}/genome.fa",
+        gtf=f"{DATA_DIR}/{GENOMES[0]}{GENOMES[1]}/genes.gtf",
+    shell: """
+    """
+
+rule star_index:
+    input:
+        "{prefix}/genome.fa"
+    output:
+        "{prefix}/StarIndex"
+    threads: 8
+    shell:
+        "STAR --runThreadN {threads} --runMode genomeGenerate "
+        "--genomeDir {output} --genomeFastaFiles {input}"
+
+rule star_hgmm:
+    input:
+        fastq = ["trim_galore/{sample}.R1_trimmed.fq.gz"], #[] is necessary
+        index = DATA_DIR+"/hg38mm10/StarIndex",
+        gtf = DATA_DIR+"/hg38mm10/genes.gtf"
+    output:
+        bam="hgmmStar/{sample}/Aligned.out.bam"
+    params: 
+        extra=config['star_hgmm']['extra']
+    threads: 10
+    #script: "scripts/star_align.py"
+    run:
+        assert len(input.fastq) in {1,2}, \
+            "input->fastq must have 1 (single-end) or 2 (paired-end) elements."
+        readcmd = "--readFilesCommand zcat" if input.fastq[0].endswith(".gz") else ""
+        gtfcmd = f"--sjdbGTFfile {input.gtf}" if input.gtf else ""
+        outprefix = path.dirname(output[0]) + '/'
+        shell("STAR "
+            "{params.extra} "
+            "--runThreadN {threads} "
+            "--genomeDir {input.index} "
+            "--readFilesIn {input.fastq} "
+            "{readcmd} {gtfcmd} "
+            "--outSAMtype BAM Unsorted "
+            "--outFileNamePrefix {outprefix} ")
+
+#later genoChr to be more generic
+rule extract_geno:
+    input: rules.star_hgmm.output.bam
+    output:
+        bam="{genome}/{sample}.bam",
+        #bai="{genome}/{sample}.bam.bai"
+    threads: 10
+    params:
+        extra="-q10"
+    shell: """
+        tmp={wildcards.genome}
+        genoChr=${{tmp:0:2}}Chr
+        tmpDir=$(mktemp -d)
+        samtools view -H {input} \
+            | sed -n "/^@SQ/! p; /SN:$genoChr/ p" \
+            | sed "s/SN:$genoChr/SN:chr/" > $tmpDir/header.sam
+        samtools view {input} {params.extra} -@ {threads} \
+            | sed -n "/\t$genoChr/ p" \
+            | sed "s/$genoChr/chr/" > $tmpDir/body.sam
+        cat $tmpDir/header.sam $tmpDir/body.sam | samtools view -Shb - > {output.bam}
+        #samtools index {output.bam}
+        rm -r $tmpDir
+        """
+

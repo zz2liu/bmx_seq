@@ -1,0 +1,14 @@
+"""samtools
+
+"""
+rule bam_index:
+    input: '{prefix}.bam' #should be sorted by coordinate
+    output: '{prefix}.bam.bai'
+    threads: 8
+    shell: "samtools index -@ {threads} {input}"
+
+rule bam_sort:
+    input: '{dir}/{prefix}.bam'
+    output: '{dir}/sorted/{prefix}.bam'
+    threads: 8
+    shell: "samtools sort --threads {threads} -m 2G -o {output} {input}"

@@ -1,0 +1,82 @@
+"""
+USAGE:
+vim config.yaml
+vim sampleInfo.csv
+ln -s cluster.json
+snakeSlurm --snakefile=$HOME/code/ngs/pipelines/bowtieDeseq/Snakefile -p
+
+need config:
+DATA_DIR:
+GENOME: #DATA_DIR/GENOME/Bowtie2Index/genome, {DATA_DIR}/{GENOME}/chrom.sizes
+
+INPUT_DIR: #{sample}.R1.fastq.gz
+SAMPLES:
+
+bowtie2:
+    minq: 10
+    extra: '--local'
+
+"""
+import os, pandas as pd
+
+#configfile: 'config.yaml'
+# Globals
+# ============================================================  
+DATA_DIR = config['DATA_DIR']
+GENOME = config['GENOME']
+BOWTIE2_INDEX = f"{DATA_DIR}/{GENOME}/Bowtie2Index/genome"
+CHROMSIZES = f'{DATA_DIR}/{GENOME}/chrom.sizes'
+
+INPUT_DIR = config['INPUT_DIR']
+#
+#def get_samples(topdir):
+#    root, dirs, files = next(os.walk(topdir))
+#    res = [x.split('.R1.fq.gz')[0] for x in files]
+#    return res
+#
+#SAMPLE_INFO = config.get('SAMPLE_INFO', '')
+## parse samples for sampleFile, or make a sampleFile and exit
+#if not SAMPLE_INFO:
+#    SAMPLES = get_samples(INPUT_DIR)
+#else:
+#    if not os.path.isfile(SAMPLE_INFO): 
+#        raise SystemExit(f'sample file {SAMPLE_INFO} not found')
+#    df = pd.read_csv(SAMPLE_INFO)
+#    SAMPLES = df['sample'].tolist()
+#
+SAMPLES = config['SAMPLES']
+rule bowtie2:
+    input:
+        R1=INPUT_DIR+'/{sample}.R1.fq.gz'
+        #R2=INPUT_DIR+'/{sample}.R2.fq.gz'
+    output:
+        bam=GENOME + "/{sample}.bam"
+    #log: "logs/bowtie2/{sample}.log"
+    params:
+        index=BOWTIE2_INDEX,
+        minq=config['bowtie2']['minq'],
+        extra=config['bowtie2'].get('extra', '')
+    log: GENOME + "/{sample}.log"
+    threads: 8
+    message: "{rule} with {wildcards} ..."
+    shell: """
+        bowtie2 -p {threads} --non-deterministic \
+        {params.extra} \
+        -x {params.index} -U {input.R1} \
+        2> {log} \
+        | samtools view -Sbh -q {params.minq} - \
+        | samtools sort -m 2G -@ {threads} - -T /tmp > {output.bam}
+        """
+    #wrapper:
+    #    "0.17.3/bio/ngs/bowtie2/align"
+
+rule bowtie2_summary:
+    input:
+        [f'{GENOME}/{sample}.log' for sample in SAMPLES]
+    output:
+        csv = 'bowtie2_summary/bowtie2.summary.csv',
+        pdf = 'bowtie2_summary/bowtie2.summary.pdf',
+    shell: """
+        python ~/code/ngs/bowtie2Summary.py {input} | sed -E 's%.+/(.+).log%\\1%' > tmp.csv
+        Rscript ~/code/ngs/bowtie2Summary.report.R bowtie2_summary/bowtie2.summary < tmp.csv
+        """

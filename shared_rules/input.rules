@@ -1,0 +1,17 @@
+# rules for input and preprocess
+# require config: 
+#   INPUT_DIR:
+#   trim_galore: extra:
+#
+rule catFastq:
+    output: "catFastq/{sample}.R1.fastq.gz"
+    shell:"""
+        cat {config[INPUT_DIR]}/{wildcards.sample}/*_R1_???.fastq.gz > {output}
+    """
+
+rule trim_galore:
+    input: rules.catFastq.output
+    output: "trim_galore/{sample}.R1_trimmed.fq.gz"#,"trim_galore/{sample}.R1_trimmed_fastqc.zip"
+    params: config['trim_galore']['extra']
+    shell: "trim_galore {params} --output_dir=trim_galore {input}"
+
