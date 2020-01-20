@@ -76,7 +76,7 @@ rule report:
     output:
         "report.html"
     script:
-        "../shared/scripts/report.py"
+        "shared/scripts/report.py"
 
     #input: all_rpkms
 TEST_SAMPLES = 'Sample_EW16 Sample_EW17 Sample_EW18 Sample_EW19 Sample_EW20 Sample_EW21 Sample_EW1 Sample_EW2 Sample_EW3'.split()
@@ -94,12 +94,12 @@ rule all_deseqDeg:
         degs=[f"{prefix}.StatWithVst.padj_05.csv" for prefix in _ALL_CONTRASTS],
 
 
-include: "../shared/rules/input.rules" #cat and trim
+include: "shared/rules/input.rules" #cat and trim
 include: "rules/alignment.rules" #star align to hgmm, extract_hg and extract_mm
-include: "../shared/rules/counts.rules" # count, annotate, summary, norm
-include: "../shared/rules/diffexpr.rules" #deseq2: model, contrast, compare, mastersheet
-include: "../shared/rules/deepTools.rules" #bamcoverage
-include: "../shared/rules/samtools.rules" #index
+include: "shared/rules/counts.rules" # count, annotate, summary, norm
+include: "shared/rules/diffexpr.rules" #deseq2: model, contrast, compare, mastersheet
+include: "shared/rules/deepTools.rules" #bamcoverage
+include: "shared/rules/samtools.rules" #index
 #include: path.join(SNAKE_DIR, "rules/alignment.rules") #align to hgmm, extract_hg and extract_mm
     #unecessary to use SNAKE_DIR, if point the snakefile here.
 
@@ -117,7 +117,7 @@ rule merge_mastersheets:
     output:
         '{genome}.deseq2/mastersheet.csv'
     script:
-        '../shared/scripts/merge_mastersheets.R'
+        'shared/scripts/merge_mastersheets.R'
 
 # add a column of mean RPKM of all samples in a deseq2 output
 rule deseq_add_rpkm:
@@ -128,7 +128,7 @@ rule deseq_add_rpkm:
         csv="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.addRpkm.csv",
         png="{genome}.deseq2.{analysis}/{contrast}.StatWithVst.padj_05.addRpkm.png"
     script:
-        "../shared/scripts/deseq_add_rpkm.R"
+        "shared/scripts/deseq_add_rpkm.R"
 
 # {genome} to be implemented later using input: unpack(lambda wildcards:...)
 # unmapped and unpassed reads to be added later from hgmmStar output
